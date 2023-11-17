@@ -1,0 +1,40 @@
+name: Lint and Test
+
+on:
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - '*.js'
+
+env:
+  DEFAULT_NODE_VERSION: 20.x
+
+jobs:
+  lint_and_test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.DEFAULT_NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Set up npm
+        run: |
+          npm ci
+
+      - name: Exec lint command
+        run: |
+          npm run lint
+
+      - name: Exec test command
+        run: |
+          npm run test
