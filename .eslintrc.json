@@ -1,0 +1,44 @@
+{
+  "extends": [
+    "hexo",
+    "plugin:json/recommended"
+  ],
+  "rules": {
+    "linebreak-style": ["error", "unix"],
+    "semi": ["error", "always"],
+    "quotes": ["error", "single"],
+    "comma-dangle": [
+      "error",
+      {
+        "arrays": "always-multiline",
+        "objects": "always-multiline",
+        "imports": "always-multiline",
+        "exports": "always-multiline",
+        "functions": "never"
+      }
+    ],
+    "object-curly-spacing": [
+      "error",
+      "always",
+      {
+        "arraysInObjects": false,
+        "objectsInObjects": true
+      }
+    ],
+    "indent": [
+      "error",
+      4,
+      {
+        "SwitchCase": 1
+      }
+    ]
+  },
+  "globals": {
+    "hexo": "readonly"
+  },
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "jest": true
+  }
+}
