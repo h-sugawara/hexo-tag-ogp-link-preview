@@ -7,9 +7,6 @@ on:
     paths:
       - '*.js'
 
-env:
-  DEFAULT_NODE_VERSION: 20.x
-
 jobs:
   lint_and_test:
     runs-on: ubuntu-latest
@@ -23,7 +20,7 @@ jobs:
       - name: Set up node
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.DEFAULT_NODE_VERSION }}
+          node-version: ${{ vars.DEFAULT_NODE_VERSION }}
           cache: npm
           cache-dependency-path: package-lock.json
 
