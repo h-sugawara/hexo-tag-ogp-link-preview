@@ -1,0 +1,172 @@
+name: Publish release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+jobs:
+  preparation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      pull_request_merged_status: ${{ steps.merged_pr.outputs.status }}
+      new_release_name: ${{ steps.new_release.outputs.name }}
+      new_release_body: ${{ steps.new_release.outputs.body }}
+      new_milestone_title: ${{ steps.new_milestone.outputs.title }}
+    steps:
+      - name: Check pull request merged
+        id: merged_pr
+        run: |
+          if "${{ github.event.pull_request.merged }}" && [[ "${{ github.event.pull_request.head.ref }}" =~ ^release/.+ ]]; then
+            echo "status=yes" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "status=no" >> $GITHUB_OUTPUT
+
+      - name: Get a latest release tag name
+        if: steps.merged_pr.outputs.status == 'yes'
+        id: latest_release_tag
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          result-encoding: string
+          script: |
+            github.hook.error("request", async (error, options) => {
+              if (error.status === 404) {
+                return {
+                  data: {tag_name: 'not found'}
+                }
+              }
+              throw error
+            });
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            }
+            const res = await github.rest.repos.getLatestRelease(params)
+            return res.data.tag_name
+
+      - name: Set up a new release
+        if: steps.merged_pr.outputs.status == 'yes'
+        id: new_release
+        run: |
+          milestone=$(echo '${{ toJSON(github.event.pull_request.milestone) }}' | jq -r)
+
+          if [[ "$(echo "${milestone}" | jq -r '.title')" =~ ^v[0-9]\.[0-9]+\.[0-9]+$ ]] && [ ${#BASH_REMATCH[@]} -gt 0 ]; then
+            echo "name=$(echo "${milestone}" | jq -r '.title')" >> $GITHUB_OUTPUT
+          elif [[ "${{ steps.latest_release_tag.outputs.result }}" =~ ^v[0-9]\.[0-9]+\.[0-9]+$ ]] && [ ${#BASH_REMATCH[@]} -gt 0 ]; then
+            echo "name=$(echo "${{ steps.latest_release_tag.outputs.result }}" | awk -F . '{print $1 "." $2+1 "." "0"}')" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ vars.DEFAULT_RELEASE_VERSION }}" >> $GITHUB_OUTPUT
+          fi
+
+          milestone_desc=$(echo "${milestone}" | jq -r '.description')
+          if [ "${milestone_desc}" != "null" ] && [ -n "${milestone_desc}" ]; then
+            delimiter="$(openssl rand -hex 8)"
+            lf=$'\n'
+            echo "body<<${delimiter}${lf}${milestone_desc}${lf}${delimiter}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up a new milestone
+        if: steps.merged_pr.outputs.status == 'yes'
+        id: new_milestone
+        run: |
+          echo "title=$(echo "${{ steps.new_release.outputs.name }}" | awk -F . '{print $1 "." $2+1 "." "0"}')" >> $GITHUB_OUTPUT
+
+      - name: Notify preparation
+        run: |
+          echo "Pull request merged status: ${{ steps.merged_pr.outputs.status }}"
+          echo "New release name: ${{ steps.new_release.outputs.name }}"
+          echo "New release body: ${{ steps.new_release.outputs.body }}"
+          echo "New milestone title: ${{ steps.new_milestone.outputs.title }}"
+
+  code_coverage:
+    needs:
+      - preparation
+    if: needs.preparation.outputs.pull_request_merged_status == 'yes'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.DEFAULT_NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Set up npm
+        run: |
+          npm ci
+
+      - name: Publish code coverage
+        uses: paambaati/codeclimate-action@v5.0.0
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+        with:
+          coverageCommand: npm run test
+          debug: true
+
+  creation:
+    needs:
+      - preparation
+      - code_coverage
+    if: needs.preparation.outputs.pull_request_merged_status == 'yes'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Create a new release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ needs.preparation.outputs.new_release_name }}',
+              name: '${{ needs.preparation.outputs.new_release_name }}',
+              body: `${{ needs.preparation.outputs.new_release_body }}`
+            }
+            await github.rest.repos.createRelease(params)
+
+      - name: Create a new milestone
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '${{ needs.preparation.outputs.new_milestone_title }}'
+            }
+            await github.rest.issues.createMilestone(params)
+
+      - name: Close a related milestone
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              milestone_number: context.payload.pull_request.milestone.number,
+              state: 'closed'
+            }
+            await github.rest.issues.updateMilestone(params)

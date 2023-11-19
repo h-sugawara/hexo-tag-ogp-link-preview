@@ -1,0 +1,242 @@
+name: Ready for release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - labeled
+
+jobs:
+  preparation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      ready_for_release_labeled_status: ${{ steps.labeled_ready_for_release.outputs.status }}
+    steps:
+      - name: Filter labeled name
+        id: filter_labeled
+        run: |
+          if [[ "${{ github.event.label.name }}" =~ ^ready-for-release ]]; then
+            i=0
+            for matched in "${BASH_REMATCH[@]}"; do
+              if [ ${i} -eq 0 ]; then
+                echo "match=${matched}" >> $GITHUB_OUTPUT
+              else
+                echo "group${i}=${matched}" >> $GITHUB_OUTPUT
+              fi
+              i=$(expr ${i} + 1)
+            done
+          fi
+
+      - name: Check ready for release labeled
+        id: labeled_ready_for_release
+        run: |
+          if [ -n "${{ steps.filter_labeled.outputs.match }}" ] && [[ "${{ github.event.pull_request.head.ref }}" =~ ^release/.+ ]]; then
+            echo "status=yes" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "status=no" >> $GITHUB_OUTPUT
+
+      - name: Notify preparation
+        run: |
+          echo "Ready for release labeled status: ${{ steps.labeled_ready_for_release.outputs.status }}"
+
+  check_application:
+    needs:
+      - preparation
+    if: needs.preparation.outputs.ready_for_release_labeled_status == 'yes'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      summarize_result: ${{ steps.summarize.outputs.result }}
+      list_up_outcomes: ${{ steps.list_up.outputs.outcomes }}
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.DEFAULT_NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Set up npm
+        run: |
+          npm ci
+
+      - name: Exec lint command
+        id: lint
+        continue-on-error: true
+        run: |
+          npm run lint
+
+      - name: Exec test command
+        id: test
+        continue-on-error: true
+        run: |
+          npm run test
+
+      - name: List up outcomes
+        id: list_up
+        run: |
+          outcomes="{}"
+          outcomes=$(echo "${outcomes}" | jq --argjson kv_pair "{\"lint\":\"${{ steps.lint.outcome }}\"}" '. + $kv_pair')
+          outcomes=$(echo "${outcomes}" | jq --argjson kv_pair "{\"test\":\"${{ steps.test.outcome }}\"}" '. + $kv_pair')
+          
+          echo "outcomes=$(echo "${outcomes}" | jq -c)" >> $GITHUB_OUTPUT
+
+      - name: Summarize result
+        id: summarize
+        run: |
+          outcomes='${{ toJSON(fromJSON(steps.list_up.outputs.outcomes)) }}'
+
+          if "$(echo "${outcomes}" | jq -r '[values[] == ("failure")] | any')"; then
+            echo "result=failure" >> $GITHUB_OUTPUT
+            exit 0
+          elif "$(echo "${outcomes}" | jq -r '[values[] == ("success")] | any | not')"; then
+            echo "result=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "result=success" >> $GITHUB_OUTPUT
+
+      - name: Notify check application
+        run: |
+          echo "Summarize result: ${{ steps.summarize.outputs.result }}"
+          echo "List up outcomes: ${{ steps.list_up.outputs.outcomes }}"
+
+  check_milestone:
+    needs:
+      - preparation
+    if: needs.preparation.outputs.ready_for_release_labeled_status == 'yes'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      set_status: ${{ steps.set_milestone.outputs.status }}
+    steps:
+      - name: Check milestone set
+        id: set_milestone
+        run: |
+          milestone=$(echo '${{ toJSON(github.event.pull_request.milestone) }}' | jq)
+          if [ "${milestone}" = "null" ]; then
+            echo "status=no" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          milestone_state=$(echo "${milestone}" | jq -r '.state')
+          if [ "${milestone_state}" != "open" ]; then
+            echo "status=no" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          milestone_desc=$(echo "${milestone}" | jq -r '.description')
+          if [ "${milestone_desc}" = "null" ] || [ -z "${milestone_desc}" ]; then
+            echo "status=no" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "status=yes" >> $GITHUB_OUTPUT
+
+      - name: Notify check milestone
+        run: |
+          echo "Milestone set status: ${{ steps.set_milestone.outputs.status }}"
+
+  notify_result:
+    needs:
+      - preparation
+      - check_application
+      - check_milestone
+    if: ${{ ! cancelled() }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Check workflow execution status
+        id: workflow_execution
+        run: |
+          if [ "${{ needs.preparation.outputs.ready_for_release_labeled_status }}" != "yes" ]; then
+            echo "status=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if [ "${{ needs.check_milestone.outputs.set_status }}" != "yes" ] || [ "${{ needs.check_application.outputs.summarize_result }}" != "success" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "event=REQUEST_CHANGES" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "event=APPROVE" >> $GITHUB_OUTPUT
+
+      - name: Setup review comment
+        if: steps.workflow_execution.outputs.status != 'skipped'
+        id: pr_review_comment
+        run: |
+          lf='\n'
+          outcomes='${{ toJSON(fromJSON(needs.check_application.outputs.list_up_outcomes)) }}'
+          
+          message="## :information_source: リリース準備の結果通知"
+          message+="${lf}### :memo: 概要"
+          message+="${lf}このプルリクエストにおける現在のアプリケーションの準備状況は、下表の通りとなります。:smiley:"
+          message+="${lf}| 項目 | 状態 |${lf}| :---: | --- |"
+          message+="${lf}| \`milestone\` |"
+          if [ "${{ needs.check_milestone.outputs.set_status }}" = "yes" ]; then
+            message+=":white_check_mark: **passed** |"
+          else
+            message+=":no_entry_sign: failed |"
+          fi
+          message+="${lf}| \`app lint\` |"
+          if [ "$(echo "${outcomes}" | jq -r '.lint')" = "success" ]; then
+            message+=":white_check_mark: **passed** |"
+          else
+            message+=":no_entry_sign: failed |"
+          fi
+          message+="${lf}| \`app test\` |"
+          if [ "$(echo "${outcomes}" | jq -r '.test')" = "success" ]; then
+            message+=":white_check_mark: **passed** |"
+          else
+            message+=":no_entry_sign: failed |"
+          fi
+
+          echo "message=${message}" >> $GITHUB_OUTPUT
+
+      - name: Review pull request
+        if: steps.workflow_execution.outputs.status != 'skipped'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: '${{ steps.workflow_execution.outputs.event }}',
+              body: '${{ steps.pr_review_comment.outputs.message }}'
+            }
+            await github.rest.pulls.createReview(params)
+
+      - name: Remove special label
+        if: steps.workflow_execution.outputs.status != 'skipped'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              name: context.payload.label.name
+            }
+            await github.rest.issues.removeLabel(params)

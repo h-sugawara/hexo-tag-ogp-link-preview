@@ -1,0 +1,190 @@
+name: Prepare release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+jobs:
+  preparation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      event_action_name: ${{ steps.event_action.outputs.name }}
+    steps:
+      - name: Check event action
+        id: event_action
+        run: |
+          if [[ !("${{ github.event.pull_request.head.ref }}" =~ ^release/.+) ]]; then
+            echo "name=close_pull_request" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ "${{ github.event.action }}" =~ ^(opened|reopened)$ ]]; then
+            echo "name=write_opening_comment" >> $GITHUB_OUTPUT
+            exit 0
+          elif [ "${{ github.event.action }}" = "synchronize" ]; then
+            for name in "${{ join(github.event.pull_request.labels.*.name, ' ') }}"; do
+              if [[ "${name}" =~ ^ready-for-release ]]; then
+                echo "name=remove_special_label" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+            done
+          fi
+
+          echo "name=none" >> $GITHUB_OUTPUT
+
+      - name: Notify preparation
+        run: |
+          echo "Event action name: ${{ steps.event_action.outputs.name }}"
+
+  close_pull_request:
+    needs:
+      - preparation
+    if: needs.preparation.outputs.event_action_name == 'close_pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Set up comment
+        id: comment
+        run: |
+          lf='\n'
+          
+          message="リリースプルリクエストの\`compare(head)\`指定が\`release\`ブランチではありません。:worried:"
+          message+="${lf}\`release\`ブランチに変更して、プルリクエストを再作成してください。:smiley:"
+
+          echo "message=${message}" >> $GITHUB_OUTPUT
+
+      - name: Write comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: '${{ steps.comment.outputs.message }}'
+            }
+            await github.rest.issues.createComment(params)
+
+      - name: Close pull request
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              state: 'closed'
+            }
+            await github.rest.pulls.update(params)
+
+  write_opening_comment:
+    needs:
+      - preparation
+    if: needs.preparation.outputs.event_action_name == 'write_opening_comment'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Set up comment
+        id: comment
+        run: |
+          lf='\n'
+
+          message="@${{ github.event.pull_request.user.login }}さん、リリースプルリクエストの作成ありがとうございます！:tada:"
+          message+="${lf}${lf}リリースは下記の手順で行ってください。"
+          message+="${lf}1. マイルストーンを新規作成、または、既存のものを編集し、リリース内容を\`description\`に記載します。"
+          message+="${lf}1. このプルリクエストに手順1のマイルストーンを紐付けます。"
+          message+="${lf}1. このプルリクエストに\`ready-for-release\`ラベルを付けます。"
+          message+="${lf}1. \`github actions bot\`のアクションを待ちます。"
+          message+="${lf}    - \`approve\`された場合、このプルリクエストをマージします。"
+          message+="${lf}    - \`request changes\`された場合、原因を特定し問題を修正して、手順2からやり直してください。"
+          message+="${lf}${lf}プルリクエストをマージすると、リリースが行われます。:rocket:"
+          message+="${lf}\`github actions bot\`が\`approve\`した後に、プルリクエストを更新した場合は、手順3からやり直してください。"
+
+          echo "message=${message}" >> $GITHUB_OUTPUT
+
+      - name: Write comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: '${{ steps.comment.outputs.message }}'
+            }
+            await github.rest.issues.createComment(params)
+
+  remove_special_label:
+    needs:
+      - preparation
+    if: needs.preparation.outputs.event_action_name == 'remove_special_label'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Remove special label
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            for (const label of context.payload.pull_request.labels) {
+              if (!label.name.startsWith("ready-for-release")) {
+                continue
+              }
+              const params = {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: label.name
+              }
+              await github.rest.issues.removeLabel(params)
+            }
+
+      - name: Set up request changes comment
+        id: request_changes_comment
+        run: |
+          lf='\n'
+
+          message="プルリクエストの内容が更新されたので、\`ready-for-release\`ラベルを外しました！:smile:"
+          message+="${lf}\`ready-for-release\`ラベルを付け直してください。:pray:"
+
+          echo "message=${message}" >> $GITHUB_OUTPUT
+
+      - name: Review request changes
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const params = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: 'REQUEST_CHANGES',
+              body: '${{ steps.request_changes_comment.outputs.message }}'
+            }
+            await github.rest.pulls.createReview(params)
