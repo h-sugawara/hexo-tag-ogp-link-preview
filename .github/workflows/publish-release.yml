@@ -88,41 +88,9 @@ jobs:
           echo "New release body: ${{ steps.new_release.outputs.body }}"
           echo "New milestone title: ${{ steps.new_milestone.outputs.title }}"
 
-  code_coverage:
-    needs:
-      - preparation
-    if: needs.preparation.outputs.pull_request_merged_status == 'yes'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-
-      - name: Set up node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ vars.DEFAULT_NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Set up npm
-        run: |
-          npm ci
-
-      - name: Publish code coverage
-        uses: paambaati/codeclimate-action@v5.0.0
-        env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-        with:
-          coverageCommand: npm run test
-          debug: true
-
   creation:
     needs:
       - preparation
-      - code_coverage
     if: needs.preparation.outputs.pull_request_merged_status == 'yes'
     runs-on: ubuntu-latest
     defaults:
