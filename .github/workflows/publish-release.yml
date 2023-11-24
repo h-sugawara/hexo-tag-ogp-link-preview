@@ -21,6 +21,7 @@ jobs:
       new_release_name: ${{ steps.new_release.outputs.name }}
       new_release_body: ${{ steps.new_release.outputs.body }}
       new_milestone_title: ${{ steps.new_milestone.outputs.title }}
+      new_milestone_description: ${{ steps.new_milestone.outputs.description }}
     steps:
       - name: Check pull request merged
         id: merged_pr
@@ -79,7 +80,17 @@ jobs:
         if: steps.merged_pr.outputs.status == 'yes'
         id: new_milestone
         run: |
-          echo "title=$(echo "${{ steps.new_release.outputs.name }}" | awk -F . '{print $1 "." $2+1 "." "0"}')" >> $GITHUB_OUTPUT
+          next_release_version=$(echo "${{ steps.new_release.outputs.name }}" | awk -F . '{print $1 "." $2+1 "." "0"}')
+
+          echo "title=${next_release_version}" >> $GITHUB_OUTPUT
+
+          lf='\n'
+          description="## $(echo ${next_release_version} | sed -E 's/^v(.+)/\1/g') (202X/XX/XX)${lf}"
+          description+="${lf}### New features${lf}"
+          description+="${lf}### Enhancements${lf}"
+          description+="${lf}### Bug fixes${lf}"
+
+          echo "description=${description}" >> $GITHUB_OUTPUT
 
       - name: Notify preparation
         run: |
@@ -87,6 +98,7 @@ jobs:
           echo "New release name: ${{ steps.new_release.outputs.name }}"
           echo "New release body: ${{ steps.new_release.outputs.body }}"
           echo "New milestone title: ${{ steps.new_milestone.outputs.title }}"
+          echo "New milestone description: ${{ steps.new_milestone.outputs.description }}"
 
   creation:
     needs:
@@ -122,7 +134,8 @@ jobs:
             const params = {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '${{ needs.preparation.outputs.new_milestone_title }}'
+              title: '${{ needs.preparation.outputs.new_milestone_title }}',
+              description: '${{ needs.preparation.outputs.new_milestone_description }}'
             }
             await github.rest.issues.createMilestone(params)
 
