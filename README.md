@@ -22,7 +22,17 @@ Write like below to your hexo article markdown file:
 {% endlink_preview %}
 ```
 
+or you are able to use "Named Parameter":
+
+```
+{% link_preview url [rel:{rel_value}] [target:{target_value}] %}
+[Content]
+{% endlink_preview %}
+```
+
 ### Tag arguments
+
+Notice: All optionally parameters (except for the required `url` parameter) are able to use "Named Parameter".
 
 | Name     | Required? | Default    | Description                                                                                                        |
 |----------|-----------|------------|--------------------------------------------------------------------------------------------------------------------|
@@ -60,6 +70,14 @@ Notice: All setting values are NOT required.
 | `disguise_crawler`         | `boolean`            | `true`         | If scraper for OpenGraph want to disguise to crawler, set `true`. Otherwise, set to `false`.                                                                                                |
 
 ## Example
+
+Write a following to your hexo article markdown file:
+
+```markdown
+{% link_preview http://www.example.com/ rel:nofollow target:_blank %}
+fallback Text
+{% endlink_preview %}
+```
 
 When scraper get OpenGraph successfully, generated html like blow:
 ```html

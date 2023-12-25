@@ -4,7 +4,7 @@ const getParameters = require('../lib/parameters');
 
 describe('parameters', () => {
     it('Specify all arguments explicitly', () => {
-        const args = ['https://example.com', '_blank', 'nofollow'];
+        const args = ['https://example.com', '_self', 'rel:noopener'];
         const fallbackText = 'fallbackText';
         const config = { class_name: { anchor_link: 'link-preview' }, descriptionLength: 140, disguise_crawler: true };
         const { class_name: className, description_length: descriptionLength } = config;
@@ -19,7 +19,13 @@ describe('parameters', () => {
                         },
                     },
                 },
-                generate: { target: args[1], rel: args[2], descriptionLength, className, fallbackText },
+                generate: {
+                    target: args[1],
+                    rel: args[2].replace('rel:', ''),
+                    descriptionLength,
+                    className,
+                    fallbackText,
+                },
             }
         );
     });
