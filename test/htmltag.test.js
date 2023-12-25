@@ -56,20 +56,36 @@ describe('htmlTag', () => {
         const alt = 'alternative text';
         const config = {
             className: { image: 'image-class' },
+            loading: 'lazy',
         };
 
         expect(newHtmlImgTag(url, alt, config)).toEqual(
-            `<img src="${url}" alt="${alt}" class="${config.className.image}">`
+            `<img src="${url}" alt="${alt}" class="${config.className.image}" loading="${config.loading}">`
         );
     });
 
     it('Generate a new html image tag without class name', () => {
         const url = 'http://example.com/';
         const alt = 'alternative text';
-        const config = {};
+        const config = {
+            loading: 'eager',
+        };
 
         expect(newHtmlImgTag(url, alt, config)).toEqual(
-            `<img src="${url}" alt="${alt}">`
+            `<img src="${url}" alt="${alt}" loading="${config.loading}">`
+        );
+    });
+
+    it('Generate a new html image tag without loading', () => {
+        const url = 'http://example.com/';
+        const alt = 'alternative text';
+        const config = {
+            className: { image: 'image-class' },
+            loading: 'none',
+        };
+
+        expect(newHtmlImgTag(url, alt, config)).toEqual(
+            `<img src="${url}" alt="${alt}" class="${config.className.image}">`
         );
     });
 });
