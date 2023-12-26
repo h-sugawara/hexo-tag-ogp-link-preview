@@ -1,7 +1,7 @@
 {
   "name": "hexo-tag-ogp-link-preview",
   "description": "A Hexo tag plugin for embedding link preview by OpenGraph on article.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "MIT",
   "author": "Hiroki Sugawara <h-sugawara@users.noreply.github.com>",
   "homepage": "https://blog.chaotic-notes.com/",
