@@ -105,8 +105,9 @@ jobs:
     steps:
       - name: Check milestone set
         id: set_milestone
+        env:
+          milestone: ${{ toJSON(github.event.pull_request.milestone) }}
         run: |
-          milestone=$(echo '${{ toJSON(github.event.pull_request.milestone) }}' | jq)
           if [ "${milestone}" = "null" ]; then
             echo "status=no" >> $GITHUB_OUTPUT
             exit 0
