@@ -58,9 +58,9 @@ jobs:
       - name: Set up a new release
         if: steps.merged_pr.outputs.status == 'yes'
         id: new_release
+        env:
+          milestone: ${{ toJSON(github.event.pull_request.milestone) }}
         run: |
-          milestone=$(echo '${{ toJSON(github.event.pull_request.milestone) }}' | jq -r)
-
           if [[ "$(echo "${milestone}" | jq -r '.title')" =~ ^v[0-9]\.[0-9]+\.[0-9]+$ ]] && [ ${#BASH_REMATCH[@]} -gt 0 ]; then
             echo "name=$(echo "${milestone}" | jq -r '.title')" >> $GITHUB_OUTPUT
           elif [[ "${{ steps.latest_release_tag.outputs.result }}" =~ ^v[0-9]\.[0-9]+\.[0-9]+$ ]] && [ ${#BASH_REMATCH[@]} -gt 0 ]; then
