@@ -16,27 +16,14 @@ jobs:
     outputs:
       ready_for_release_labeled_status: ${{ steps.labeled_ready_for_release.outputs.status }}
     steps:
-      - name: Filter labeled name
-        id: filter_labeled
-        run: |
-          if [[ "${{ github.event.label.name }}" =~ ^ready-for-release ]]; then
-            i=0
-            for matched in "${BASH_REMATCH[@]}"; do
-              if [ ${i} -eq 0 ]; then
-                echo "match=${matched}" >> $GITHUB_OUTPUT
-              else
-                echo "group${i}=${matched}" >> $GITHUB_OUTPUT
-              fi
-              i=$(expr ${i} + 1)
-            done
-          fi
-
       - name: Check ready for release labeled
         id: labeled_ready_for_release
         run: |
-          if [ -n "${{ steps.filter_labeled.outputs.match }}" ] && [[ "${{ github.event.pull_request.head.ref }}" =~ ^release/.+ ]]; then
-            echo "status=yes" >> $GITHUB_OUTPUT
-            exit 0
+          if [[ "${{ github.event.label.name }}" =~ ^ready-for-release ]] && [ "${#BASH_REMATCH[@]}" -gt 0 ]; then
+            if [[ "${{ github.event.pull_request.head.ref }}" =~ ^release/.+ ]]; then
+              echo "status=yes" >> $GITHUB_OUTPUT
+              exit 0
+            fi
           fi
           echo "status=no" >> $GITHUB_OUTPUT
 
@@ -54,7 +41,7 @@ jobs:
         shell: bash
     outputs:
       summarize_result: ${{ steps.summarize.outputs.result }}
-      list_up_outcomes: ${{ steps.list_up.outputs.outcomes }}
+      summarize_outcomes: ${{ steps.summarize.outputs.outcomes }}
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -82,19 +69,14 @@ jobs:
         run: |
           npm run test
 
-      - name: List up outcomes
-        id: list_up
+      - name: Summarize result
+        id: summarize
         run: |
           outcomes="{}"
           outcomes=$(echo "${outcomes}" | jq --argjson kv_pair "{\"lint\":\"${{ steps.lint.outcome }}\"}" '. + $kv_pair')
           outcomes=$(echo "${outcomes}" | jq --argjson kv_pair "{\"test\":\"${{ steps.test.outcome }}\"}" '. + $kv_pair')
-          
-          echo "outcomes=$(echo "${outcomes}" | jq -c)" >> $GITHUB_OUTPUT
 
-      - name: Summarize result
-        id: summarize
-        run: |
-          outcomes='${{ toJSON(fromJSON(steps.list_up.outputs.outcomes)) }}'
+          echo "outcomes=$(echo "${outcomes}" | jq -c)" >> $GITHUB_OUTPUT
 
           if "$(echo "${outcomes}" | jq -r '[values[] == ("failure")] | any')"; then
             echo "result=failure" >> $GITHUB_OUTPUT
@@ -103,13 +85,12 @@ jobs:
             echo "result=skipped" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
           echo "result=success" >> $GITHUB_OUTPUT
 
       - name: Notify check application
         run: |
           echo "Summarize result: ${{ steps.summarize.outputs.result }}"
-          echo "List up outcomes: ${{ steps.list_up.outputs.outcomes }}"
+          echo "Summarize outcomes: ${{ steps.summarize.outputs.outcomes }}"
 
   check_milestone:
     needs:
@@ -124,8 +105,9 @@ jobs:
     steps:
       - name: Check milestone set
         id: set_milestone
+        env:
+          milestone: ${{ toJSON(github.event.pull_request.milestone) }}
         run: |
-          milestone=$(echo '${{ toJSON(github.event.pull_request.milestone) }}' | jq)
           if [ "${milestone}" = "null" ]; then
             echo "status=no" >> $GITHUB_OUTPUT
             exit 0
@@ -185,7 +167,7 @@ jobs:
         id: pr_review_comment
         run: |
           lf='\n'
-          outcomes='${{ toJSON(fromJSON(needs.check_application.outputs.list_up_outcomes)) }}'
+          outcomes='${{ toJSON(fromJSON(needs.check_application.outputs.summarize_outcomes)) }}'
           
           message="## :information_source: リリース準備の結果通知"
           message+="${lf}### :memo: 概要"

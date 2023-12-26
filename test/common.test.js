@@ -1,6 +1,6 @@
 'use strict';
 
-const { hasProperty, stringLength, stringSlice } = require('../lib/common');
+const { hasProperty, hasTypeOfProperty, getObjectValueFrom, getValidNumber } = require('../lib/common');
 
 describe('common', () => {
     it('Has a property at object', () => {
@@ -15,39 +15,35 @@ describe('common', () => {
         expect(hasProperty(obj, 'not_test_key')).toBeFalsy();
     });
 
-    it('Calculate a length of string', () => {
-        expect(stringLength('aBあア亞　 19%+👨🏻‍💻🇯🇵🍎')).toEqual(14);
+    it('Has a property at object which string type', () => {
+        const obj = { 'test_key': 'test_value' };
+
+        expect(hasTypeOfProperty(obj, 'test_key', 'string')).toBeTruthy();
     });
 
-    it('Cannot calculate a length of except for string', () => {
-        expect(() => stringLength(0)).toThrow(new Error('text is not string type.'));
+    it('Has a property at object which except for string type', () => {
+        const obj = { 'test_key': 1234 };
+
+        expect(hasTypeOfProperty(obj, 'test_key', 'string')).toBeFalsy();
     });
 
-    it('Slice a string', () => {
-        expect(stringSlice('aBあア亞　 19%+👨🏻‍💻🇯🇵🍎', 0, 3)).toEqual('aBあ');
+    it('Get a value of property at object which string type successfully', () => {
+        const obj = { 'test_key': 'test_value' };
+
+        expect(getObjectValueFrom(obj, 'test_key', 'string', 'default_value')).toEqual('test_value');
     });
 
-    it('Cannot slice a value except for string', () => {
-        expect(() => stringSlice(0)).toThrow(new Error('text is not string type.'));
+    it('Get a default value which specified because fail to get a value of object property', () => {
+        const obj = { 'test_key': 1234 };
+
+        expect(getObjectValueFrom(obj, 'test_key', 'string', 'default_value')).toEqual('default_value');
     });
 
-    it('Slice a string (start is not number type)', () => {
-        expect(stringSlice('aBあア亞　 19%+👨🏻‍💻🇯🇵🍎', 'hoge', 5)).toEqual('aBあア亞');
+    it('Get a valid number from specified value successfully', () => {
+        expect(getValidNumber(1234, 9876)).toEqual(1234);
     });
 
-    it('Slice a string (start is smaller than zero)', () => {
-        expect(stringSlice('aBあア亞　 19%+👨🏻‍💻🇯🇵🍎', -5, 13)).toEqual('%+👨🏻‍💻🇯🇵');
-    });
-
-    it('Slice a string (end calculate automatically)', () => {
-        expect(stringSlice('aBあア亞　 19%+👨🏻‍💻🇯🇵🍎', 7)).toEqual('19%+👨🏻‍💻🇯🇵🍎');
-    });
-
-    it('Slice a string (end is smaller than zero)', () => {
-        expect(stringSlice('aBあア亞　 19%+👨🏻‍💻🇯🇵🍎', 7, -4)).toEqual('19%');
-    });
-
-    it('Slice a string (end is smaller than start)', () => {
-        expect(stringSlice('aBあア亞　 19%+👨🏻‍💻🇯🇵🍎', -1, -2)).toEqual('');
+    it('Get a default number which specified because value is not valid number', () => {
+        expect(getValidNumber('test_value', 9876)).toEqual(9876);
     });
 });

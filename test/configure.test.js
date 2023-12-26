@@ -18,7 +18,7 @@ describe('configure', () => {
     it('Specify all values', () => {
         const hexoCfg = {
             link_preview: {
-                class_name: { anchor_link: 'link-preview', image: 'not-gallery-item' },
+                class_name: { anchor_link: 'link-preview-2', image: 'not-gallery-item' },
                 description_length: 100,
                 disguise_crawler: false,
             },
@@ -26,7 +26,7 @@ describe('configure', () => {
 
         expect(getConfig(hexoCfg)).toEqual(
             {
-                class_name: { anchor_link: 'link-preview', image: 'not-gallery-item' },
+                class_name: { anchor_link: 'link-preview-2', image: 'not-gallery-item' },
                 description_length: 100,
                 disguise_crawler: false,
             }
@@ -36,13 +36,13 @@ describe('configure', () => {
     it('Specify a valid string value at class_name', () => {
         const hexoCfg = {
             link_preview: {
-                class_name: 'link-preview',
+                class_name: 'link-preview-2',
             },
         };
 
         expect(getConfig(hexoCfg)).toEqual(
             {
-                class_name: { anchor_link: 'link-preview' },
+                class_name: { anchor_link: 'link-preview-2' },
                 description_length: 140,
                 disguise_crawler: true,
             }
@@ -68,14 +68,14 @@ describe('configure', () => {
     it('Specify a object which has valid anchor_link only at class_name', () => {
         const hexoCfg = {
             link_preview: {
-                class_name: { anchor_link: 'link-preview' },
+                class_name: { anchor_link: 'link-preview-2' },
             },
         };
 
         expect(getConfig(hexoCfg)).toEqual(
             {
                 class_name: {
-                    anchor_link: 'link-preview',
+                    anchor_link: 'link-preview-2',
                 },
                 description_length: 140,
                 disguise_crawler: true,
