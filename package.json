@@ -1,7 +1,7 @@
 {
   "name": "hexo-tag-ogp-link-preview",
   "description": "A Hexo tag plugin for embedding link preview by OpenGraph on article.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "license": "MIT",
   "author": "Hiroki Sugawara <h-sugawara@users.noreply.github.com>",
   "homepage": "https://blog.chaotic-notes.com/",
@@ -28,13 +28,13 @@
     "test": "jest --verbose --coverage"
   },
   "devDependencies": {
-    "eslint": "^8.53.0",
+    "eslint": "^8.56.0",
     "eslint-config-hexo": "^5.0.0",
     "eslint-plugin-json": "^3.1.0",
     "jest": "^29.7.0"
   },
   "dependencies": {
-    "hexo-util": "^3.1.0",
-    "open-graph-scraper": "^6.3.2"
+    "hexo-util": "^3.2.0",
+    "open-graph-scraper": "^6.3.3"
   }
 }
