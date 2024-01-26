@@ -15,6 +15,7 @@ describe('parameters', () => {
                     url: args[0],
                     fetchOptions: {
                         headers: {
+                            'accept': 'text/html',
                             'user-agent': 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Googlebot/2.1; +http://www.google.com/bot.html) Chrome/112.0.0.0 Safari/537.36',
                         },
                     },
@@ -43,6 +44,7 @@ describe('parameters', () => {
                     url: args[0],
                     fetchOptions: {
                         headers: {
+                            'accept': 'text/html',
                             'user-agent': 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Googlebot/2.1; +http://www.google.com/bot.html) Chrome/112.0.0.0 Safari/537.36',
                         },
                     },
@@ -60,7 +62,7 @@ describe('parameters', () => {
 
         expect(getParameters(args, fallbackText, config)).toEqual(
             {
-                scrape: { url: args[0], fetchOptions: {} },
+                scrape: { url: args[0], fetchOptions: { headers: { accept: 'text/html' } } },
                 generate: { target: '_blank', rel: 'nofollow', loading: 'lazy', descriptionLength, className, fallbackText },
             }
         );
